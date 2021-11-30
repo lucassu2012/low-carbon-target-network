@@ -153,13 +153,14 @@ app.layout = html.Div(
                         [
                             html.H3(
                                 # "Low-Carbon Target Network Online",
-                                "低碳目标网 - 管理看板",
-                                # style={"margin-bottom": "0px"},
+                                "低碳站点目标网",
+                                style={"margin-bottom": "0px",
+                                       "fontWeight": "bold", },
                             ),
-                            # html.H5(
-                            #     "Geographical Overview",
-                            #     # style={"margin-top": "0px"}
-                            # ),
+                            html.H6(
+                                "可评估, 可收益, 可预测, 可视, 可选",
+                                style={"margin-top": "0px", 'fontSize': 14}
+                            ),
                         ]
                     ),
                     className="one-half column",
