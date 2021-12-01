@@ -33,16 +33,45 @@ kpi_cols_list_cr = ['KPI_TEE_2345G_Current', 'KPI_SEE_2345G_Current', 'KPI_RER_2
                     'KPI_NCI_2345G_Current', 'KPI_NC_2345G_Current']
 kpi_cols_list_tb = ['KPI_TEE_2345G_Tobe', 'KPI_SEE_2345G_Tobe', 'KPI_RER_2345G_Tobe',
                     'KPI_NCI_2345G_Tobe', 'KPI_NC_2345G_Tobe']
-table_col_list = ['Site_Name', 'Site_City', 'Site_Area', 'Site_Room', 'Site_Type', 'Site_Scene'] + kpi_cols_list_tb
+# table_col_list = ['Site_Name', 'Site_City', 'Site_Area', 'Site_Room', 'Site_Type', 'Site_Scene'] + kpi_cols_list_tb
 
 supply_col_list = ['Selection_PV', 'Selection_Battery_Voltage']
-supply_col_text = ['站点叠光', '锂电池升压']
+supply_col_priority = ['Priority_PV', 'Priority_Battery_Voltage']
+supply_col_text = ['供-站点叠光', '供-锂电池升压']
 power_col_list = ['Selection_Rectifier', 'Selection_Battery_HighTemp', 'Selection_Battery_Supply']
-power_col_text = ['高效电源', '高温电池', '锂电池']
+power_col_priority = ['Priority_Rectifier', 'Priority_Battery_HighTemp', 'Priority_Battery_Supply']
+power_col_text = ['配-高效电源', '配-高温电池', '配-锂电池错峰']
 utilization_col_list = ['Selection_FCS', 'Selection_I2O']
-utilization_col_text = ['FCS改造', '室内改室外']
+utilization_col_priority = ['Priority_FCS', 'Priority_I2O']
+utilization_col_text = ['用-FCS减空调', '用-室内改室外']
 management_col_list = ['Selection_Power_Star']
-management_col_text = ['智能管理系统']
+management_col_priority = ['Priority_Power_Star']
+management_col_text = ['管-智能管理系统']
+
+df_stats = df.filter(regex="^Priority").apply(lambda x: x.value_counts()).fillna(0).astype(int)
+map_dict = {col: text for col, text in
+            zip(supply_col_priority + power_col_priority + utilization_col_priority + management_col_priority,
+                supply_col_text + power_col_text + utilization_col_text + management_col_text)}
+map_dict_inv = {col: text for col, text in
+                zip(supply_col_text + power_col_text + utilization_col_text + management_col_text,
+                    supply_col_priority + power_col_priority + utilization_col_priority + management_col_priority,
+                    )}
+
+df_stats.columns = df_stats.columns.map(map_dict)
+df_stats.loc[:, ['用-射频高密', '用-高效MM', '用-天面一体']] = 0
+df_stats.loc[3, ['用-射频高密', '用-高效MM', '用-天面一体']] = len(df)
+df_stats.index = ['不推荐', '推荐-低', '推荐-中', '推荐-高']
+df_stats = df_stats.reindex(columns=['供-站点叠光', '供-锂电池升压',
+                                     '配-高效电源', '配-高温电池', '配-锂电池错峰',
+                                     '用-射频高密', '用-高效MM', '用-天面一体', '用-室内改室外', '用-FCS减空调',
+                                     '管-智能管理系统',
+                                     ])
+df_stats.index.name = '推荐度'
+df_stats.T.index.name = '低碳方案'
+df_stats = df_stats.T.reset_index()
+df_stats.loc[:, ['推荐-中', '推荐-低']] = df_stats.loc[:, ['推荐-中', '推荐-低']].applymap(lambda x: ' ⬜ ' + str(x))
+df_stats.loc[:, ['推荐-高']] = df_stats.loc[:, ['推荐-高']].applymap(lambda x: ' ✅ ' + str(x))
+df_stats_clean = df_stats[['低碳方案', '推荐-高', '推荐-中', '推荐-低']]
 
 Power_Saving_Cols = [
     'Power_Saving_PV',
@@ -103,11 +132,36 @@ table_col_list = [
     dict(id='Site_Room', name='Site_Room', type='string', format=Format(precision=2, scheme=Scheme.percentage)),
     # dict(id='Site_Type', name='Site_Type', type='string', format=Format(precision=2, scheme=Scheme.percentage)),
     # dict(id='Site_Scene', name='Site_Scene', type='string', format=Format(precision=2, scheme=Scheme.percentage)),
-    dict(id='KPI_TEE_2345G_Tobe', name='TEE', type='numeric', format=Format(precision=2, scheme=Scheme.decimal)),
-    dict(id='KPI_SEE_2345G_Tobe', name='SEE', type='numeric', format=Format(precision=2, scheme=Scheme.percentage)),
-    dict(id='KPI_RER_2345G_Tobe', name='RER', type='numeric', format=Format(precision=2, scheme=Scheme.percentage)),
-    dict(id='KPI_NCI_2345G_Tobe', name='NCI', type='numeric', format=Format(precision=2, scheme=Scheme.fixed)),
-    dict(id='KPI_NC_2345G_Tobe', name='NC', type='numeric', format=Format(precision=0, scheme=Scheme.fixed))
+    dict(id='KPI_TEE_2345G_Tobe', name='TEE', type='numeric', format=Format(precision=2, scheme=Scheme.decimal),
+         selectable=True),
+    dict(id='KPI_SEE_2345G_Tobe', name='SEE', type='numeric', format=Format(precision=2, scheme=Scheme.percentage),
+         selectable=True),
+    dict(id='KPI_RER_2345G_Tobe', name='RER', type='numeric', format=Format(precision=2, scheme=Scheme.percentage),
+         selectable=True),
+    dict(id='KPI_NCI_2345G_Tobe', name='NCI', type='numeric', format=Format(precision=2, scheme=Scheme.fixed),
+         selectable=True),
+    dict(id='KPI_NC_2345G_Tobe', name='NC', type='numeric', format=Format(precision=0, scheme=Scheme.fixed),
+         selectable=True)
+]
+
+site_info_col_dict = {
+    'Site_Name': "站点名称",
+    'Site_Area': "所在区域",
+    'Site_Room': "室内外类型",
+    'Power_Supply_Type': "供电方式",
+    'Power_Supply_PV_Annual_Tobe': "日均发电潜力(kWh/kWp)",
+    'Rectifier_Efficiency_Current': "电源转计划效率(%)",
+    'Cooling_Type': "温控方式",
+    'Battery_Type_Current': "储电方式",
+    'KPI_TEE_2345G_Tobe': "TEE",
+    'KPI_SEE_2345G_Tobe': "SEE",
+    'KPI_RER_2345G_Tobe': "RER",
+    'KPI_NCI_2345G_Tobe': "NCI",
+    'KPI_NC_2345G_Tobe': "NC"
+}
+site_info_col_format = [
+    dict(id='站点信息', name='站点信息', type='string', format=Format(precision=0, scheme=Scheme.fixed)),
+    dict(id='当前状态', name='当前状态', type='numeric', format=Format(precision=2, scheme=Scheme.fixed)),
 ]
 
 # API
@@ -153,13 +207,13 @@ app.layout = html.Div(
                         [
                             html.H3(
                                 # "Low-Carbon Target Network Online",
-                                "低碳站点目标网",
+                                "低碳站点目标网Online",
                                 style={"margin-bottom": "0px",
                                        "fontWeight": "bold", },
                             ),
                             html.H6(
-                                "可评估, 可收益, 可预测, 可视, 可选",
-                                style={"margin-top": "0px", 'fontSize': 14}
+                                html.B("可规划, 可评估, 可预测, 可收益"),
+                                style={"margin-top": "0px", 'fontSize': 14, 'color': "#061FFA", }
                             ),
                         ]
                     ),
@@ -175,11 +229,12 @@ app.layout = html.Div(
                         daq.BooleanSwitch(id='switch', on=False,
                                           # label="Enable S-P-U-M Solution",
                                           label={
-                                              'label': "选择‘供-配-用-管’方案",
+                                              'label': "开启‘供-配-用-管’方案",
                                               'style': {'fontSize': 14,
                                                         "fontWeight": "bold",
                                                         },
                                           },
+                                          color="#16C831",
                                           labelPosition="top"),
                     ],
                     className="one-third column",
@@ -194,7 +249,136 @@ app.layout = html.Div(
             [
                 html.Div(
                     [
-                        html.B("0. 动态条件筛选"),
+                        html.Center(html.B("1.可规划：'供-配-用-管'方案规划",
+                                           style={'color': "#061FFA", 'fontSize': 16})),
+                        # html.Br(),
+                        # html.Center(html.B(
+                        #         # "'S-P-U-M' System:",
+                        #         "'供-配-用-管' 解决方案规划",
+                        #         className="control_label"
+                        #     )),
+                        html.Div([
+                            html.Div(
+                                [
+                                    html.Center(html.P("条件筛选模块")),
+                                    dcc.RadioItems(
+                                        id="power_type_selector",
+                                        options=[
+                                            # {"label": "'供' - Supply ", "value": "Supply"},
+                                            # {"label": "'配' - Power ", "value": "Power"},
+                                            # {"label": "'用' - Utilization ", "value": "Utilization"},
+                                            # {"label": "'管' - Management ", "value": "Management"},
+                                            # {"label": "All", "value": "all"},
+                                            {"label": "选择'供'方案", "value": "Supply"},
+                                            {"label": "选择'配'方案", "value": "Power"},
+                                            {"label": "选择'用'方案", "value": "Utilization"},
+                                            {"label": "选择'管'方案", "value": "Management"},
+                                            {"label": "全选", "value": "all"},
+                                        ],
+                                        value="all",
+                                        labelStyle={"display": "inline-block"},
+                                        className="dcc_control",
+                                    ),
+                                    dcc.Dropdown(
+                                        id="power_types",
+                                        options=[
+                                            {
+                                                "label": text, "value": col
+                                            } for col, text in zip(
+                                                supply_col_list + power_col_list + utilization_col_list + management_col_list,
+                                                supply_col_text + power_col_text + utilization_col_text + management_col_text
+                                            )
+                                        ]
+                                        ,
+                                        multi=True,
+                                        value=[
+                                            {
+                                                "label": i.replace('Selection_', ''), "value": i
+                                            } for i in supply_col_list
+                                        ],
+                                        className="dcc_control",
+                                    ),
+                                    html.P(
+                                        # "Filter by city name:",
+                                        "按站点所在区域筛选：",
+                                        className="control_label"
+                                    ),
+                                    dcc.RadioItems(
+                                        id="city_name_selector",
+                                        options=[
+                                            # {"label": "All ", "value": "all"},
+                                            # {"label": "Customize ", "value": "custom"},
+                                            {"label": "全选", "value": "all"},
+                                            {"label": "自定义 ", "value": "custom"},
+                                        ],
+                                        value="all",
+                                        labelStyle={"display": "inline-block"},
+                                        className="dcc_control",
+                                    ),
+                                    dcc.Dropdown(
+                                        id="city_names",
+                                        options=[
+                                            {"label": i.title(), "value": i} for i in sorted(df['Site_Area'].unique())
+                                        ],
+                                        multi=True,
+                                        value=list(sorted(df['Site_Area'].unique())),
+                                        className="dcc_control",
+                                    ),
+                                    dcc.Checklist(
+                                        id="lock_selector",
+                                        options=[{
+                                            # "label": "Indoor",
+                                            "label": "选择室内站",
+                                            "value": "Indoor"
+                                        },
+                                            {
+                                                # "label": "Outdoor",
+                                                "label": "选择室外站",
+                                                "value": "Outdoor"
+                                            }],
+                                        labelStyle={'display': 'inline-block'},
+                                        value=["Indoor", "Outdoor"],
+                                        className="dcc_control",
+                                    ),
+                                    # html.Br(),
+                                ],
+                                className="pretty_container six columns",
+                            ),
+                            html.Div(
+                                [
+                                    html.Center(html.P("智能选站模块")),
+                                    dash_table.DataTable(
+                                        id='stats_table',
+                                        columns=[{"name": i, "id": i} for i in df_stats_clean.columns],
+                                        data=df_stats_clean.to_dict('records'),
+                                        editable=False,
+                                        style_header={
+                                            "fontWeight": "bold",
+                                            "textAlign": "center",
+                                            "backgroundColor": "#666666",
+                                            'color': 'white'
+                                        },
+                                        style_cell={
+                                            "textAlign": "left",
+                                            'fontSize': 12,
+                                            'border': '0.5px solid gray'
+                                        },
+                                        style_data_conditional=[
+                                            {
+                                                'if': {'state': 'active'},
+                                                'backgroundColor': 'white',
+                                                'border': '0.5px solid gray',
+                                            },
+                                        ],
+                                        merge_duplicate_headers=True
+                                    ),
+                                ],
+                                className="pretty_container six columns",
+                            ),
+                        ],
+                            className="row container-display",
+                        ),
+                        html.Br(),
                         html.P(
                             # "Filter by 5G construction date (or select range in histogram):",
                             "按站点低碳改造日期筛选：",
@@ -211,117 +395,14 @@ app.layout = html.Div(
                             allowCross=False,
                             tooltip={"placement": "bottom", "always_visible": True},
                         ),
-                        # html.Br(),
-                        html.P(
-                            # "Filter by city name:",
-                            "按站点所在区域筛选：",
-                            className="control_label"
-                        ),
-                        dcc.RadioItems(
-                            id="city_name_selector",
-                            options=[
-                                # {"label": "All ", "value": "all"},
-                                # {"label": "Customize ", "value": "custom"},
-                                {"label": "全选", "value": "all"},
-                                {"label": "自定义 ", "value": "custom"},
-                            ],
-                            value="all",
-                            labelStyle={"display": "inline-block"},
-                            className="dcc_control",
-                        ),
-                        dcc.Dropdown(
-                            id="city_names",
-                            options=[
-                                {"label": i.title(), "value": i} for i in sorted(df['Site_Area'].unique())
-                            ],
-                            multi=True,
-                            value=list(sorted(df['Site_Area'].unique())),
-                            className="dcc_control",
-                        ),
-                        dcc.Checklist(
-                            id="lock_selector",
-                            options=[{
-                                # "label": "Indoor",
-                                "label": "选择室内站",
-                                "value": "Indoor"
-                            },
-                                {
-                                    # "label": "Outdoor",
-                                    "label": "选择室外站",
-                                    "value": "Outdoor"
-                                }],
-                            labelStyle={'display': 'inline-block'},
-                            value=["Indoor", "Outdoor"],
-                            className="dcc_control",
-                        ),
-                        html.Br(),
-                        html.B(
-                            # "'S-P-U-M' System:",
-                            "'供-配-用-管' 解决方案选择: ",
-                            className="control_label"
-                        ),
-                        dcc.RadioItems(
-                            id="power_type_selector",
-                            options=[
-                                # {"label": "'供' - Supply ", "value": "Supply"},
-                                # {"label": "'配' - Power ", "value": "Power"},
-                                # {"label": "'用' - Utilization ", "value": "Utilization"},
-                                # {"label": "'管' - Management ", "value": "Management"},
-                                # {"label": "All", "value": "all"},
-                                {"label": "选择'供'方案", "value": "Supply"},
-                                {"label": "选择'配'方案", "value": "Power"},
-                                {"label": "选择'用'方案", "value": "Utilization"},
-                                {"label": "选择'管'方案", "value": "Management"},
-                                {"label": "全选", "value": "all"},
-                            ],
-                            value="all",
-                            labelStyle={"display": "inline-block"},
-                            className="dcc_control",
-                        ),
-                        dcc.Dropdown(
-                            id="power_types",
-                            options=[
-                                {
-                                    "label": text, "value": col
-                                } for col, text in zip(
-                                    supply_col_list + power_col_list + utilization_col_list + management_col_list,
-                                    supply_col_text + power_col_text + utilization_col_text + management_col_text
-                                )
-                            ]
-                            ,
-                            multi=True,
-                            value=[
-                                {
-                                    "label": i.replace('Selection_', ''), "value": i
-                                } for i in supply_col_list
-                            ],
-                            className="dcc_control",
-                        ),
-                        html.Br(),
-                        html.B(
-                            # "Select by kpi name:",
-                            "地理化指标可视: ",
-                            className="control_label"
-                        ),
-                        dcc.Dropdown(
-                            id="kpi_selector",
-                            options=[
-                                {"label": i, "value": i} for i in sorted(df.columns.to_list()[10:])
-                            ],
-                            multi=False,
-                            value=df.columns.to_list()[-1],
-                            placeholder="kpi name",
-                            style={"border": "0px solid black"},
-                            className="dcc_control",
-                        ),
                     ],
                     className="pretty_container six columns",
                     id="cross-filter-options",
                 ),
                 html.Div(
                     [
-                        html.Center(html.B("1.可评估 - 低碳目标网改造评估指标体系, 五大核心指标",
-                                           style={'color': "#777777", 'fontSize': 14})),
+                        html.Center(html.B("2.可评估：低碳目标网改造评估指标体系",
+                                           style={'color': "#061FFA", 'fontSize': 16})),
                         html.Div(
                             [
                                 html.Div(
@@ -332,8 +413,9 @@ app.layout = html.Div(
                                             labelPosition='top',
                                             value=0,
                                             size=32,
-                                            color="#0000FF",
                                             # backgroundColor="#F1F3F5",
+                                            color="#16C831",
+                                            # color="#171717",
                                         ),
                                         html.H6(id="TEE", style={'text-align': 'center'}),
                                     ],
@@ -348,7 +430,8 @@ app.layout = html.Div(
                                             labelPosition='top',
                                             value=0,
                                             size=32,
-                                            color="#0000FF"
+                                            color="#16C831",
+                                            # color="#171717",
                                         ),
                                         html.H6(id="RER", style={'text-align': 'center'}),
                                     ],
@@ -363,7 +446,8 @@ app.layout = html.Div(
                                             labelPosition='top',
                                             value=0,
                                             size=32,
-                                            color="#0000FF"
+                                            color="#16C831",
+                                            # color="#171717",
                                         ),
                                         html.H6(id="SEE", style={'text-align': 'center'}),
                                     ],
@@ -378,7 +462,8 @@ app.layout = html.Div(
                                             labelPosition='top',
                                             value=0,
                                             size=32,
-                                            color="#FF5E5E"
+                                            color="#FF5E5E",
+                                            # color="#171717",
                                         ),
                                         html.H6(id="NCI", style={'text-align': 'center'}),
                                     ],
@@ -393,7 +478,8 @@ app.layout = html.Div(
                                             labelPosition='top',
                                             value=0,
                                             size=32,
-                                            color="#FF5E5E"
+                                            color="#FF5E5E",
+                                            # color="#171717",
                                         ),
                                         html.H6(id="NC", style={'text-align': 'center'}),
                                     ],
@@ -406,11 +492,14 @@ app.layout = html.Div(
                         ),
                         html.Div(
                             [
-                                dcc.Graph(id="count_graph",
-                                          config={
-                                              'displayModeBar': False
-                                          },
-                                          )
+                                dcc.Loading(
+                                    dcc.Graph(
+                                        id="pie_graph",
+                                        config={
+                                            'displayModeBar': False
+                                        }
+                                    )
+                                )
                             ],
                             id="countGraphContainer",
                             className="pretty_container",
@@ -426,29 +515,97 @@ app.layout = html.Div(
             [
                 html.Div(
                     [
-                        dcc.Graph(id="main_graph",
-                                  # style={
-                                  #     "height": "auto",
-                                  #     "width": "auto",
-                                  #     "margin-left": "0px",
-                                  # },
-                                  config={
-                                      'displayModeBar': False
-                                  }
-                                  )
+                        # html.Br(),
+                        html.B(
+                            # "Select by kpi name:",
+                            "指标地理化可视: ",
+                            className="control_label"
+                        ),
+                        dcc.Dropdown(
+                            id="kpi_selector",
+                            options=[
+                                {"label": i, "value": i} for i in sorted(df.columns.to_list()[10:])
+                            ],
+                            multi=False,
+                            value=df.columns.to_list()[-1],
+                            placeholder="kpi name",
+                            style={"border": "0px solid black"},
+                            className="dcc_control",
+                        ),
+                        dcc.Loading(
+                            dcc.Graph(id="main_graph",
+                                      config={
+                                          'displayModeBar': False
+                                      }
+                                      )
+                        )
                     ],
                     className="pretty_container six columns",
                 ),
                 html.Div(
                     [
-                        dcc.Graph(id="individual_graph",
-                                  # style={
-                                  #     "margin-left": "0px",
-                                  # },
-                                  config={
-                                      'displayModeBar': False
-                                  }
-                                  ),
+                        html.Center(html.B("3.可预测: 站点级低碳指标预测",
+                                           style={'color': "#061FFA", 'fontSize': 16})),
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.Center(html.B("站点基础信息"), style={'color': "#777777"}, ),
+                                        dash_table.DataTable(
+                                            id='individual_table',
+                                            # columns=[{"name": i, "id": i} for i in df_stats_clean.columns],
+                                            # data=df_stats_clean.to_dict('records'),
+                                            columns=site_info_col_format,
+                                            data=df.loc[0, list(site_info_col_dict.keys())].rename(
+                                                site_info_col_dict).T.reset_index().to_dict("records"),
+                                            editable=False,
+                                            style_cell={
+                                                "textAlign": "left",
+                                                'fontSize': 12,
+                                                # 'font-family': 'sans-serif',
+                                                # "color": "#777777"
+                                            },
+                                            style_header={
+                                                "fontWeight": "bold",
+                                                "textAlign": "center",
+                                                "backgroundColor": "#666666",
+                                                'color': 'white'
+                                            },
+                                            style_table={"overflowX": "auto", "width": "calc(100% - 26px)", },
+                                            style_data_conditional=[
+                                                {
+                                                    "if": {"state": "selected"},
+                                                    "backgroundColor": "transparent",
+                                                    'color': 'blue',
+                                                    "border": "1px solid gray",
+                                                },
+                                                {
+                                                    "if": {"column_id": "当前状态"},
+                                                    "textAlign": "right",
+                                                    # "paddingRight": 10,
+                                                },
+                                                {
+                                                    "if": {"row_index": "odd"},
+                                                    "backgroundColor": "#F0F1F3",
+                                                },
+                                            ],
+                                            merge_duplicate_headers=True
+                                        ),
+                                    ],
+                                    className="pretty_container six columns",
+                                ),
+                                html.Div(
+                                    [
+                                        dcc.Graph(id="individual_graph",
+                                                  style={'height': "95%"},
+                                                  config={'displayModeBar': False}
+                                                  ),
+                                    ],
+                                    className="pretty_container six columns",
+                                ),
+                            ],
+                            className="row container-display",
+                        ),
                     ],
                     className="pretty_container six columns",
                 )
@@ -459,8 +616,7 @@ app.layout = html.Div(
             [
                 html.Div(
                     [
-                        html.Center(html.B("5.可选 - 低碳改造Top站点排序选择",
-                                           style={'fontSize': 14, 'font-family': 'sans-serif'})),
+                        html.Center(html.B("低碳改造Top站点排序选择", style={'fontSize': 16})),
                         dash_table.DataTable(
                             id="main_table",
                             columns=table_col_list,
@@ -468,29 +624,46 @@ app.layout = html.Div(
                             page_size=10,
                             sort_action="native",
                             row_selectable="multi",
-                            style_cell={"textAlign": "center", 'fontSize': 14, 'font-family': 'sans-serif',
-                                        "color": "#777777"},
+                            column_selectable="multi",
+                            style_cell={
+                                "textAlign": "center",
+                                'fontSize': 14,
+                                # 'font-family': 'sans-serif',
+                                # "color": "#777777"
+                            },
                             style_header={
                                 "fontWeight": "bold",
                                 "textAlign": "center",
-                                "border": "none",
-                                # "backgroundColor": "transparent",
-                                'backgroundColor': 'rgb(30, 30, 30)',
+                                # "border": "none",
+                                "backgroundColor": "#666666",
+                                # 'backgroundColor': 'rgb(30, 30, 30)',
+                                # "backgroundColor": "rgb(2,21,70)",
                                 'color': 'white'
                             },
-                            style_data={
-                                'backgroundColor': 'rgb(50, 50, 50)',
-                                'color': 'white'
-                            },
-                            style_table={"overflowX": "auto", "width": "calc(100% - 26px)", },
+                            # style_data={
+                            #     'backgroundColor': 'rgb(50, 50, 50)',
+                            #     'color': 'white'
+                            # },
+                            # style_table={"overflowX": "auto", "width": "calc(100% - 26px)", },
                             style_data_conditional=[
                                 {
                                     "if": {"state": "selected"},
                                     "backgroundColor": "transparent",
-                                    'color': 'black',
-                                    "border": "0px solid transparent",
-                                }
+                                    'color': 'blue',
+                                    "border": "1px solid gray",
+                                },
+                                # {
+                                #     "if": {"column_id": "param"},
+                                #     "textAlign": "right",
+                                #     "paddingRight": 10,
+                                # },
+                                {
+                                    "if": {"row_index": "odd"},
+                                    "backgroundColor": "#F0F1F3",
+                                },
                             ],
+                            # active_cell={"row": 0, "column": 0},
+                            # selected_cells=[{"row": 0, "column": 0}],
                         ),
                         # html.Button("clear selection", id="clear",
                         #             style={
@@ -503,14 +676,11 @@ app.layout = html.Div(
                 ),
                 html.Div(
                     [
-                        dcc.Graph(id="pie_graph",
-                                  style={
-                                      "margin-left": "0px",
-                                  },
+                        dcc.Graph(id="count_graph",
                                   config={
                                       'displayModeBar': False
-                                  }
-                                  )
+                                  },
+                                  ),
                     ],
                     className="pretty_container six columns",
                 )
@@ -532,24 +702,55 @@ app.clientside_callback(
 
 
 # %% Create callbacks
+# functions to select cells
+@app.callback(
+    Output("stats_table", "data"),
+    [
+        Input('stats_table', 'active_cell'),
+        State('stats_table', 'data')
+    ]
+)
+def update_datatable(cell, data):
+    if not cell:
+        raise dash.exceptions.PreventUpdate
+    else:
+        row_selected, column_name = cell["row"], cell["column_id"]
+        cell_string = data[row_selected][column_name]
+        if cell_string[1] == '✅':
+            data[row_selected][column_name] = cell_string.replace('✅', '⬜')
+        elif cell_string[1] == '⬜':
+            data[row_selected][column_name] = cell_string.replace('⬜', '✅')
+
+        return data
+
+
 # function to create data
 @app.callback(
     Output("pre_data", "data"),
-    Input("power_types", "value"),
+    [
+        Input("power_types", "value"),
+        Input('stats_table', 'data')
+    ]
 )
-def read_data(power_types):
-    selection_dict = {
-        'Selection_Battery_Voltage': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_Battery_Supply': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_FCS': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_I2O': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_Power_Star': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_Rectifier': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_PV': {3: 0, 2: 0, 1: 0, 0: 0},
-        'Selection_Battery_HighTemp': {3: 0, 2: 0, 1: 0, 0: 0},
-    }
-    for col in power_types:
-        selection_dict.get(col).update({3: 1, 2: 1, 1: 1, 0: 0})
+def read_data(power_types, data):
+    # selection_dict = {
+    #     'Selection_Battery_Voltage': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_Battery_Supply': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_FCS': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_I2O': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_Power_Star': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_Rectifier': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_PV': {3: 0, 2: 0, 1: 0, 0: 0},
+    #     'Selection_Battery_HighTemp': {3: 0, 2: 0, 1: 0, 0: 0},
+    # }
+    # for col in power_types:
+    #     selection_dict.get(col).update({3: 1, 2: 1, 1: 1, 0: 0})
+
+    df_test = pd.DataFrame(data).set_index('低碳方案')
+    df_test.index = df_test.index.map(map_dict_inv)
+    df_test.columns = df_test.columns.map({'推荐-高': 3, '推荐-中': 2, '推荐-低': 1})
+    df_test = df_test.loc[df_test.index.dropna()].applymap(lambda x: 1 if '✅' in x else 0)
+    selection_dict = {k.replace('Priority', 'Selection'): v for k, v in df_test.T.to_dict().items()}
 
     df_pre = data_preprocessing(data_path=DATA_PATH + '/02_eng_clean.csv', selection_dict=selection_dict)
     datasets = {
@@ -739,7 +940,7 @@ def make_main_figure(json_datasets, kpi_selector, derived_virtual_data, derived_
             zoom=8,
         ),
         title={
-            'text': '<b>4.可视 - 低碳指标: {} 地理化<b>'.format(kpi_selector),
+            'text': '<b>低碳指标: {} 地理化<b>'.format(kpi_selector),
             'font': {'size': 14},
             'y': 0.98,
             'x': 0.5,
@@ -798,20 +999,26 @@ def make_main_figure(json_datasets, kpi_selector, derived_virtual_data, derived_
 
 # Main graph -> individual graph
 @app.callback(
-    Output("individual_graph", "figure"),
     [
-        # Input("datasets", "data"),
+        Output("individual_graph", "figure"),
+        Output("individual_table", "data")
+    ],
+    [
         Input("main_graph", "hoverData"),
         Input("year_slider", "value"),
+        Input("datasets", "data"),
     ]
 )
-def make_individual_figure(main_graph_hover, year_slider):
+def make_individual_figure(main_graph_hover, year_slider, json_datasets):
+    datasets = json.loads(json_datasets)
+    df_filter_site = pd.read_json(datasets['df_filter_site'], orient='split')
+
     date_index = pd.date_range(start=datetime.date(year_slider[0], 1, 1),
                                end=datetime.date(year_slider[1], 1, 1),
                                freq='Y')
     df_aggregate_date = pd.DataFrame(
         {
-            'Site_Name': 'All',
+            'Site_Name': 'Site1',
             'Date': date_index,
             'NCI': 100 + np.cumsum(np.random.normal(10, 1, len(date_index)) - 10),
             'NC': 100 + np.cumsum(np.random.normal(100, 1, len(date_index)) - 100),
@@ -824,7 +1031,7 @@ def make_individual_figure(main_graph_hover, year_slider):
         df_aggregate_date['Site_Name'] = chosen[0]
         df = df_aggregate_date[df_aggregate_date['Site_Name'].isin(chosen)]
     else:
-        chosen = ['All']
+        chosen = ['Site1']
         df = df_aggregate_date
 
     df = df_aggregate_date.groupby('Date', as_index=False).mean()
@@ -853,6 +1060,8 @@ def make_individual_figure(main_graph_hover, year_slider):
             ),
         ],
         layout=dict(
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=False),
             autosize=True,
             automargin=True,
             margin=dict(l=30, r=30, b=20, t=40),
@@ -873,8 +1082,8 @@ def make_individual_figure(main_graph_hover, year_slider):
             font=dict(color="#777777"),
             # title="KPI View of Site: {}".format(chosen[0]),
             title={
-                'text': "<b>3.可预测 - 站点级低碳指标预测, 站点:{} <b>".format(chosen[0]),
-                'font': {'size': 14, 'color': "#777777"},
+                'text': "<b>站点:{} 低碳预测<b>".format(chosen[0]),
+                'font': {'size': 14},
                 'y': 0.98,
                 'x': 0.5,
                 'xanchor': 'center',
@@ -883,7 +1092,12 @@ def make_individual_figure(main_graph_hover, year_slider):
         )
     )
 
-    return figure
+    df_info = df_filter_site[df_filter_site['Site_Name'].isin(chosen)]
+    # df_info = df[df['Site_Name'].isin(['Site1'])]
+    df_info.T.index.name = '站点信息'
+    df_info.index = ['当前状态']
+
+    return figure, df_info.T.loc[list(site_info_col_dict.keys())].rename(site_info_col_dict).reset_index().to_dict('records')
 
 
 # Selectors, main graph -> pie graph
@@ -899,7 +1113,7 @@ def make_pie_figure(json_datasets, year_slider):
     df_filter_site = pd.read_json(datasets['df_filter_site'], orient='split')
 
     agg_ps = df_filter_site[Power_Saving_Cols].replace(0, np.nan).sum().to_list()
-    agg_pc = df_filter_site[Power_Saving_Cols].replace(0, np.nan).sum().to_list()
+    agg_pc = df_filter_site[Power_Consumption_Cols].replace(0, np.nan).sum().to_list()
 
     color_list = ['#FFEDA0', '#FA9FB5', '#A1D99B', '#67BD65', '#BFD3E6', '#B3DE69', '#FDBF6F', '#FC9272', '#D0D1E6',
                   '#ABD9E9', '#3690C0', '#F87A72', '#CA6BCC', '#DD3497', '#4EB3D3', '#FFFF33', '#FB9A99', '#A6D853',
@@ -935,8 +1149,7 @@ def make_pie_figure(json_datasets, year_slider):
 
     layout = dict(
         autosize=True,
-        automargin=True,
-        margin=dict(l=30, r=30, b=20, t=40),
+        margin=dict(l=10, r=10, b=0, t=20),
         hovermode="closest",
         # template=plotly.io.templates['plotly_dark'],
         plot_bgcolor="#F9F9F9",
@@ -954,7 +1167,7 @@ def make_pie_figure(json_datasets, year_slider):
                     ),
         # title="Power Summary: {} to {}".format(year_slider[0], year_slider[1]),
         title={
-            'text': "<b>电源能耗分布 vs 绿色节能分布: {}年到{}年<b>".format(year_slider[0], year_slider[1]),
+            'text': "<b>石化能耗分布 vs 绿色节能分布: {}年到{}年<b>".format(year_slider[0], year_slider[1]),
             'font': {'size': 14, 'color': "#777777"},
             'y': 0.98,
             'x': 0.5,
@@ -1008,8 +1221,8 @@ def make_count_figure(json_datasets, year_slider):
         font=dict(color="#777777"),
         # title="Saving by Low-Carbon Target Network, USD: {} to {}".format(year_slider[0], year_slider[1]),
         title={
-            'text': "<b>2.可收益 - 低碳目标网改造收益 (USD/年): {}年到{}年<b>".format(year_slider[0], year_slider[1]),
-            'font': {'size': 14, 'color': "#777777"},
+            'text': "<b>4.可收益：低碳目标网改造收益 (USD/年) - {}年到{}年<b>".format(year_slider[0], year_slider[1]),
+            'font': {'size': 16, 'color': "#061FFA"},
             'y': 0.98,
             'x': 0.5,
             'xanchor': 'center',

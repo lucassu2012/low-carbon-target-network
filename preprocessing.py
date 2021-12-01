@@ -2,7 +2,6 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 
-
 data_path = 'data/02_eng_clean.csv'
 # selection_dict
 selection_dict = {
@@ -843,46 +842,46 @@ def data_preprocessing(data_path, selection_dict=selection_dict):
 
     # Power Saving
     def cal_Power_Saving_PV(df, col='Power_Saving_PV'):
-        df[col] = df['Power_Supply_PV_Annual_Tobe']
+        df[col] = round(df['Power_Supply_PV_Annual_Tobe'], 2)
         return df
 
     def cal_Power_Saving_Rectifier(df, col='Power_Saving_Rectifier'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             'Power_Consumption_Site_Radio_2345G_Annual_Current * '
             '(1 / Rectifier_Efficiency_Current - 1 / Rectifier_Efficiency_Tobe)'
-        )
+        ), 2)
         return df
 
     def cal_Power_Saving_Cable(df, col='Power_Saving_Cable'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             'Power_Consumption_Site_Radio_2345G_Annual_Current * '
             '(Power_Consumption_Cable_Loss_Current - Power_Consumption_Cable_Loss_Tobe)'
-        )
+        ), 2)
         return df
 
     def cal_Power_Saving_FCS(df, col='Power_Saving_FCS'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             'Selection_FCS * (Power_Consumption_Cooling_Annual_Current - Power_Consumption_Cooling_Annual_Tobe)'
-        )
+        ), 2)
         return df
 
     def cal_Power_Saving_I2O(df, col='Power_Saving_I2O'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             'Selection_I2O * (Power_Consumption_Cooling_Annual_Current - Power_Consumption_Cooling_Annual_Outdoor)'
-        )
+        ), 2)
         return df
 
     def cal_Power_Saving_PowerStar(df, col='Power_Saving_PowerStar'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             'Power_Star_Saving_234G_Annual + Power_Star_Saving_5G_Annual'
-        )
+        ), 2)
         return df
 
     def cal_Power_Saving_Total(df, col='Power_Saving_Total'):
-        df[col] = np.nansum([
+        df[col] = round(np.nansum([
             df['Power_Saving_PV'], df['Power_Saving_Rectifier'], df['Power_Saving_Cable'],
             df['Power_Saving_FCS'], df['Power_Saving_I2O'], df['Power_Saving_PowerStar']
-        ], axis=0)
+        ], axis=0), 2)
 
         return df
 
@@ -895,22 +894,22 @@ def data_preprocessing(data_path, selection_dict=selection_dict):
     data_clean = cal_Power_Saving_Total(data_clean)
 
     def cal_Electricity_Saving_Total(df, electricity_price_per_kwh=0.168, col='Electricity_Saving_Total'):
-        df[col] = df['Power_Saving_Total'] * 1000 * electricity_price_per_kwh
+        df[col] = round(df['Power_Saving_Total'] * 1000 * electricity_price_per_kwh, 2)
         return df
 
     def cal_Rental_Saving(df, rental_price_per_year=500, col='Rental_Saving'):
-        df[col] = df['Selection_I2O'] * rental_price_per_year
+        df[col] = round(df['Selection_I2O'] * rental_price_per_year, 2)
         return df
 
     def cal_Opex_Saving_Total(df, opex_cost_per_year=1560, col='Opex_Saving_Total'):
-        df[col] = df['Selection_Battery_Supply'] * opex_cost_per_year * 0.02 + \
-                  df['Selection_I2O'] * opex_cost_per_year * 0.05
+        df[col] = round(df['Selection_Battery_Supply'] * opex_cost_per_year * 0.02 + \
+                        df['Selection_I2O'] * opex_cost_per_year * 0.05, 2)
         return df
 
     def cal_Carbon_Saving(df, carbon_price_per_tco2=82, col='Carbon_Saving'):
-        df[col] = df.eval(
+        df[col] = round(df.eval(
             '(KPI_NC_2345G_Current - KPI_NC_2345G_Tobe) * Alpha / 1e6 * @carbon_price_per_tco2'
-        )
+        ), 2)
         return df
 
     data_clean = cal_Electricity_Saving_Total(data_clean)
@@ -926,4 +925,6 @@ def data_preprocessing(data_path, selection_dict=selection_dict):
 
 
 # df = data_preprocessing(data_path, selection_dict=selection_dict)
+# df[['Power_Consumption_Aircondition', 'Power_Consumption_FCS', 'Power_Consumption_Site_Radio_234G',
+#     'Power_Consumption_Site_Radio_5G','Power_Consumption_Cable_Loss_Current']].sum()
 # df[['Electricity_Saving_Total', 'Rental_Saving', 'Opex_Saving_Total', 'Carbon_Saving']].sum()
